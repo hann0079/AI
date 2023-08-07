@@ -1,0 +1,894 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # [실습] Python을 활용한 AI 모델링 - 딥러닝 파트
+# + 이번시간에는 Python을 활용한 AI 모델링에서 딥러닝에 대해 실습해 보겠습니다.
+# + 여기서는 딥러닝 모델 DNN, CNN, RNN 에 대해 코딩하여 모델 구축해 보겠습니다.
+# + 한가지 당부 드리고 싶은 말은 "백문이불여일타" 입니다. 
+# + 이론보다 실습이 더 많은 시간과 노력이 투자 되어야 합니다.
+
+# ## 학습목차
+# 1. 실습을 위한 KT AIDU 환경변수 설정
+# 2. 딥러닝 모델(DNN, CNN, RNN) 프로세스
+#  - 데이터 가져오기
+#  - 데이터 전처리
+#  - Train, Test 데이터셋 분할
+#  - 데이터 정규화
+#  - 딥러닝 모델 : DNN, CNN, RNN
+
+# # 
+# # 1. 실습을 위한 KT AIDU 환경변수 설정
+
+# In[1]:
+
+
+# 코드실행시 경고 메시지 무시
+
+import warnings
+warnings.filterwarnings(action='ignore') 
+
+
+# ##### AIDU 라이브러리 임포트
+
+# In[2]:
+
+
+from aicentro.session import Session
+from aicentro.framework.keras import Keras as AiduFrm
+
+aidu_session = Session(verify=False)
+aidu_framework = AiduFrm(session=aidu_session)
+
+
+# ##### AIDU 디렉토리 환경변수
+# 
+# - data 경로:         aidu_framework.config.data_dir
+
+# In[3]:
+
+
+# aidu_framework.config.data_dir 내용 확인
+aidu_framework.config.data_dir
+
+
+# # 
+# # 2. 딥러닝 모델(DNN, CNN, RNN) 프로세스
+# ① 라이브러리 임포트(import)  
+# ② 데이터 가져오기(Loading the data)  
+# ③ 탐색적 데이터 분석(Exploratory Data Analysis)  
+# ④ 데이터 전처리(Data PreProcessing) : 데이터타입 변환, Null 데이터 처리, 누락데이터 처리, 
+# 더미특성 생성, 특성 추출 (feature engineering) 등  
+# ⑤ Train, Test  데이터셋 분할  
+# ⑥ 데이터 정규화(Normalizing the Data)  
+# ⑦ 모델 개발(Creating the Model)  
+# ⑧ 모델 성능 평가
+
+# ## ① 라이브러리 임포트
+
+# ##### 필요 라이브러리 임포트
+
+# In[4]:
+
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+# ## ② 데이터 로드
+
+# In[5]:
+
+
+#고객등급(cust_class), 성별(sex_type), 나이(age), 사용서비스수(efct_svc_count), 서비스중지여부 (dt_stop_yn), 미납여부(npay_yn)
+#3개월 평균 요금(r3m_avg_bill_amt), A서비스 3개월 평균요금(r3m_A_avg_arpu_amt), B서비스 3개월 평균요금(r3m_B_avg_arpu_amt), 해지여부(termination_yn)
+
+df = pd.read_csv('cust_data.csv')
+
+
+# ## ③ 데이터 분석
+
+# In[6]:
+
+
+# 12컬럼, 7814 라인
+df.info()
+
+
+# In[7]:
+
+
+df.tail()
+
+
+# In[8]:
+
+
+# termination 레이블 불균형 
+df['termination'].value_counts().plot(kind='bar')
+
+
+# ## ④ 데이터 전처리
+
+# + Object 컬럼에 대해 Pandas get_dummies 함수 활용하여 One-Hot-Encoding
+
+# In[9]:
+
+
+cal_cols = ['class', 'sex', 'stop', 'npay', 'termination', 'bill_rating']
+
+
+# In[10]:
+
+
+df1 = pd.get_dummies(data=df, columns=cal_cols, drop_first=True)
+
+
+# In[11]:
+
+
+# 19컬럼, 7814 라인
+df1.info()
+
+
+# ## ⑤ Train, Test  데이터셋 분할
+
+# In[12]:
+
+
+from sklearn.model_selection import train_test_split
+
+
+# In[13]:
+
+
+X = df1.drop('termination_Y', axis=1).values
+y = df1['termination_Y'].values
+
+
+# In[14]:
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, 
+                                                    test_size=0.3, 
+                                                    stratify=y,
+                                                    random_state=42)
+
+
+# In[15]:
+
+
+X_train.shape
+
+
+# In[16]:
+
+
+y_train.shape
+
+
+# ## ⑥ 데이터 정규화/스케일링(Normalizing/Scaling)
+
+# In[17]:
+
+
+# 숫자 분포 이루어진 컬럼 확인
+df1.tail()
+
+
+# In[18]:
+
+
+from sklearn.preprocessing import MinMaxScaler
+
+
+# In[19]:
+
+
+scaler = MinMaxScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+
+# In[20]:
+
+
+X_train[:2]
+
+
+# + 모델 입력갯수, 출력갯수 확인
+
+# In[21]:
+
+
+X_train.shape
+
+
+# In[22]:
+
+
+y_train.shape
+
+
+# ## ⑦ 모델 개발
+
+# ###  
+# ## 1) DNN
+
+# #### 
+# #### A. 이진 분류용 DNN layer
+# + 18개 input layer
+# + unit 4개 hidden layer
+# + unit 3개 hidden layer 
+# + 1개 output layser : 이진분류
+
+# ![hidden Layer](https://github.com/gzone2000/TEMP_TEST/raw/master/hidden_layer1.PNG)
+# + [출처] https://subscription.packtpub.com/book/data/9781788995207/1/ch01lvl1sec03/deep-learning-intuition
+
+# In[23]:
+
+
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Activation, Dropout
+
+
+# In[24]:
+
+
+# 18개 input layer
+# unit 4개 hidden layer
+# unit 3개 hidden layer 
+# 1개 output layser : 이진분류
+
+model = Sequential()
+model.add(Dense(4, activation='relu', input_shape=(18,)))
+model.add(Dense(3, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+
+
+# #### 모델 확인
+
+# In[25]:
+
+
+model.summary()
+
+
+# #### 모델 컴파일 – 이진 분류 모델
+
+# In[26]:
+
+
+model.compile(optimizer='adam', 
+              loss='binary_crossentropy', 
+              metrics=['accuracy']) 
+
+
+# + Dropout : 과적합 방지
+
+# ![dropout](https://github.com/gzone2000/TEMP_TEST/raw/master/dropout.PNG)
+# + [출처] https://medium.com/@amarbudhiraja/https-medium-com-amarbudhiraja-learning-less-to-learn-better-dropout-in-deep-machine-learning-74334da4bfc5
+
+# In[31]:
+
+
+model = Sequential()
+model.add(Dense(4, activation='relu', input_shape=(18,)))
+model.add(Dropout(0.3))
+model.add(Dense(3, activation='relu'))
+model.add(Dropout(0.3))
+model.add(Dense(1, activation='sigmoid'))
+
+
+# In[32]:
+
+
+model.summary()
+
+
+# #### 모델 컴파일 – 이진 분류 모델
+
+# In[33]:
+
+
+model.compile(optimizer='adam', 
+              loss='binary_crossentropy', 
+              metrics=['accuracy']) 
+
+
+# #### 모델 훈련(학습) 하기
+
+# In[34]:
+
+
+history = model.fit(X_train, y_train, 
+          validation_data=(X_test, y_test),
+          epochs=20, 
+          batch_size=16)
+
+
+# #### 
+# #### B. 다중 분류용 DNN layer
+# + 18개 input layer
+# + unit 5개 hidden layer
+# + dropout
+# + unit 4개 hidden layer 
+# + dropout
+# + 2개 output layser : 이진분류
+
+# ![다중분류](https://github.com/gzone2000/TEMP_TEST/raw/master/hidden_layer2.PNG)
+# + [출처] https://www.educba.com/dnn-neural-network/
+
+# In[31]:
+
+
+# 18개 input layer
+# unit 5개 hidden layer
+# dropout
+# unit 4개 hidden layer 
+# dropout
+# 2개 output layser : 다중분류
+
+model = Sequential()
+model.add(Dense(5, activation='relu', input_shape=(18,)))
+model.add(Dropout(0.3))
+model.add(Dense(4, activation='relu'))
+model.add(Dropout(0.3))
+model.add(Dense(2, activation='softmax'))
+
+
+# In[32]:
+
+
+model.summary()
+
+
+# #### 모델 컴파일 – 다중 분류 모델
+
+# In[33]:
+
+
+model.compile(optimizer='adam', 
+              loss='sparse_categorical_crossentropy', 
+              metrics=['accuracy']) 
+
+
+# #### 모델 훈련(학습) 하기
+
+# In[34]:
+
+
+history = model.fit(X_train, y_train, 
+          validation_data=(X_test, y_test),
+          epochs=20, 
+          batch_size=16)
+
+
+# ## ⑧ 모델 성능 평가
+# + 성능 시각화
+
+# In[35]:
+
+
+losses = pd.DataFrame(model.history.history)
+
+
+# In[36]:
+
+
+losses.head()
+
+
+# In[37]:
+
+
+losses[['loss','val_loss']].plot()
+
+
+# In[38]:
+
+
+losses[['loss','val_loss', 'accuracy','val_accuracy']].plot()
+
+
+# In[39]:
+
+
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Acc')
+plt.legend(['acc', 'val_acc'])
+plt.show()
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# ###  
+# ## 2) CNN
+
+# ![CNN](https://miro.medium.com/max/2000/1*vkQ0hXDaQv57sALXAJquxA.jpeg)
+# + [출처] https://towardsdatascience.com/a-comprehensive-guide-to-convolutional-neural-networks-the-eli5-way-3bd2b1164a53
+
+# 
+# + CNN은 이미지 처리에 높은 성능을 보여주고 있어 DNN에서 다뤄던 Tabular 형태의 데이터를 가지고 테스트 진행하기 어려워
+# + 따로 이미지 준비하여 CNN 실습을 진행하겠습니다.
+
+# #### KT AIDU 사이트에 업로드된 이미지 파일 가져오기
+
+# In[40]:
+
+
+from glob import glob
+import tensorflow as tf
+
+
+# In[41]:
+
+
+# KT AIDU 사이트에 업로드한 dataset-clean,dirty.zip 파일 확인
+glob('dataset-clean,dirty.zip')
+
+
+# In[42]:
+
+
+# dataset-clean,dirty.zip 파일을 현재 디렉토리로 복사 
+get_ipython().system('mkdir IMAGE')
+get_ipython().system('cp ./dataset-clean,dirty.zip ./IMAGE')
+
+
+# In[43]:
+
+
+# dataset-small-clean,dirty.zip 압축풀기 
+get_ipython().system('cd IMAGE ; unzip -o dataset-clean,dirty.zip')
+
+
+# In[44]:
+
+
+# dataset-small-clean,dirty/0.clean 폴더 안의 이지미 갯수
+get_ipython().system('ls -l ./IMAGE/dataset-clean,dirty/clean | grep jpg | wc -l')
+
+
+# In[45]:
+
+
+# dataset-small-clean,dirty/1.drity 폴더 안의 이지미 갯수
+get_ipython().system('ls -l ./IMAGE/dataset-clean,dirty/dirty | grep jpg | wc -l')
+
+
+# #### 이미지 파일 하나 읽어 이미지 보기
+
+# In[46]:
+
+
+clean_img_path = './IMAGE/dataset-clean,dirty/clean/plastic1.jpg'
+
+
+# In[47]:
+
+
+gfile = tf.io.read_file(clean_img_path)
+image = tf.io.decode_image(gfile, dtype=tf.float32)
+
+
+# In[48]:
+
+
+image.shape
+
+
+# In[49]:
+
+
+plt.imshow(image)
+plt.show()
+
+
+# In[50]:
+
+
+dirty_img_path = './IMAGE/dataset-clean,dirty/dirty/dirty_plastic1.jpg'
+
+
+# In[51]:
+
+
+gfile = tf.io.read_file(dirty_img_path)
+image = tf.io.decode_image(gfile, dtype=tf.float32)
+
+
+# In[52]:
+
+
+image.shape
+
+
+# In[53]:
+
+
+plt.imshow(image)
+plt.show()
+
+
+# #### Data Preprocess
+# + tensorflow ImageDataGenerator 함수 활용하여 이미지 데이터 스케일 및 트레인 데이터/ 테스트 데이트 나누기
+# + flow_from_directory 함수 활용하여 나누어진 트레인 데이터와 테스트 데이터에 대해 배치 사이즈 나누고 , 셔플하고 labeling 수행
+
+# In[54]:
+
+
+# Hyperparameter Tunning
+
+num_epochs = 50 
+batch_size = 4
+learning_rate = 0.001
+
+input_shape = (384, 512, 3)  # 사이즈 확인
+num_classes = 2    # clean, dirty
+
+
+# In[55]:
+
+
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+
+# In[56]:
+
+
+# ImageDataGenerator 이용하여 이미지 전처리하기
+
+training_datagen = ImageDataGenerator(
+      rescale=1. / 255,
+      validation_split=0.2     # train set : 435 * (1 - 0.2) = 348
+    )
+
+test_datagen = ImageDataGenerator(
+      rescale=1./255,
+      validation_split=0.2     # test set : 435 * 0.2 = 87
+    )
+
+
+# In[57]:
+
+
+# 이미지 데이터 읽고 배치 , 셔플하고 labeling 수행
+
+# IMAGE 포더 밑에 .ipynb_checkpoints 폴더 있을경우 폴데 삭제
+get_ipython().system('rm -rf ./IMAGE/dataset-clean,dirty/.ipynb_checkpoints')
+
+training_generator = training_datagen.flow_from_directory(
+    './IMAGE/dataset-clean,dirty/',
+    batch_size=batch_size, 
+    target_size=(384, 512),       # 사이즈 확인
+    class_mode = 'categorical',   # binary , categorical
+    shuffle = True,
+    subset = 'training'           # training, validation. validation_split 사용하므로 subset 지정
+    )
+
+test_generator = test_datagen.flow_from_directory(
+    './IMAGE/dataset-clean,dirty/',
+    batch_size=batch_size, 
+    target_size=(384, 512),       # 사이즈 확인
+    class_mode = 'categorical',   # binary , categorical
+    shuffle = True,
+    subset = 'validation'         # training, validation. validation_split 사용하므로 subset 지정
+    )
+
+
+# In[58]:
+
+
+# class 이름 및 번호 매핑 확인
+print(training_generator.class_indices)
+
+
+# In[59]:
+
+
+batch_samples = next(iter(training_generator))
+
+print('True Value : ',batch_samples[1][0])
+plt.imshow(batch_samples[0][0])   
+plt.show()
+
+
+# #### CNN 모델링
+
+# In[60]:
+
+
+#CNN 라이브러리 임포트
+
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten, Dropout
+from tensorflow.keras.layers import Conv2D, MaxPooling2D
+
+
+# In[61]:
+
+
+# Feature extraction
+model = Sequential()
+model.add(Conv2D(filters=32, kernel_size=3, activation='relu', input_shape=input_shape))
+model.add(MaxPooling2D(pool_size=2))
+model.add(Conv2D(filters=16, kernel_size=3, activation='relu'))
+model.add(MaxPooling2D(pool_size=2))
+
+# Classification
+model.add(Flatten())
+model.add(Dense(50, activation='relu'))
+model.add(Dense(2, activation='softmax'))
+
+
+# In[62]:
+
+
+model.summary()
+
+
+# #### 모델 컴파일 – 이진 분류 모델
+
+# In[63]:
+
+
+#model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate), 
+model.compile(optimizer='adam', 
+              loss='categorical_crossentropy', 
+              metrics=['accuracy']) 
+
+
+# #### 모델 훈련(학습) 하기
+# - <font color=red>__(주의)__</font>  GPU 없이 학습시 시간이 오래 걸릴수 있습니다. epochs 횟수 줄이기 권장
+
+# In[64]:
+
+
+history = model.fit(training_generator, 
+          epochs=20 ,
+          steps_per_epoch = len(training_generator) / batch_size,
+          validation_steps = len(test_generator) / batch_size,
+          validation_data=test_generator, 
+          verbose=1
+)
+
+
+# #### **성능 시각화 - 성능평가**
+
+# In[65]:
+
+
+losses = pd.DataFrame(model.history.history)
+
+
+# In[66]:
+
+
+losses.head()
+
+
+# In[67]:
+
+
+losses[['loss','val_loss']].plot()
+
+
+# In[68]:
+
+
+losses[['loss','val_loss', 'accuracy','val_accuracy']].plot()
+
+
+# In[69]:
+
+
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Acc')
+plt.legend(['acc', 'val_acc'])
+plt.show()
+
+
+# #### **예측하기**
+
+# In[70]:
+
+
+# test_generator 샘플 데이터 가져오기
+# 배치 사이즈 32 확인
+
+batch_img, batch_label = next(iter(test_generator))
+print(batch_img.shape)
+print(batch_label.shape)
+
+
+# In[71]:
+
+
+# 4개 Test 샘플 이미지 그려보고 예측해 보기
+
+i = 1 
+plt.figure(figsize=(16, 30))
+for img, label in list(zip(batch_img, batch_label)):
+    pred = model.predict(img.reshape(-1,384, 512,3))
+    pred_t = np.argmax(pred)
+    plt.subplot(8, 4, i)
+    plt.title(f'True Value:{np.argmax(label)}, Pred Value: {pred_t}')
+    plt.imshow(img)   
+    i = i + 1
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# ###  
+# ## 3) RNN 
+
+# ![RNN](https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Recurrent_neural_network_unfold.svg/1200px-Recurrent_neural_network_unfold.svg.png)
+# + [출처] https://en.wikipedia.org/wiki/File:Recurrent_neural_network_unfold.svg
+
+# 
+# + RNN은 주로 시계열 처리나 자연어 처리에 사용됩니다.
+# + 우리 실습에 시계열 데이터나 자연어 관련 데이터가 없어 DNN에서 사용한 Tabular 데이터를 가지고 RNN 실습하도록 하겠습니다.
+
+# #### RNN 모델링
+
+# In[72]:
+
+
+#RNN 라이브러리 임포트
+
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten
+from tensorflow.keras.layers import LSTM
+
+
+# In[73]:
+
+
+X_train.shape, X_test.shape
+
+
+# In[74]:
+
+
+X_train = X_train.reshape(-1,18,1)
+X_test = X_test.reshape(-1,18,1)
+
+
+# In[75]:
+
+
+X_train.shape, X_test.shape
+
+
+# In[76]:
+
+
+# define model
+model = Sequential()
+model.add(LSTM(32, activation='relu', return_sequences=True, input_shape=(18, 1)))
+model.add(LSTM(16, activation='relu', return_sequences=True))
+model.add(Flatten())
+model.add(Dense(8, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+
+
+# In[77]:
+
+
+model.summary()
+
+
+# #### **모델 컴파일 – 이진 분류 모델**
+
+# In[78]:
+
+
+model.compile(optimizer='adam', 
+              loss='binary_crossentropy', 
+              metrics=['accuracy']) 
+
+
+# #### **모델 학습**
+
+# In[79]:
+
+
+history = model.fit(x=X_train, y=y_train, 
+          epochs=10 , batch_size=128,
+          validation_data=(X_test, y_test), 
+          verbose=1
+)
+
+
+# #### 성능 시각화 - 성능평가
+
+# In[80]:
+
+
+losses = pd.DataFrame(model.history.history)
+
+
+# In[81]:
+
+
+losses.head()
+
+
+# In[82]:
+
+
+losses[['loss','val_loss']].plot()
+
+
+# In[83]:
+
+
+losses[['loss','val_loss', 'accuracy','val_accuracy']].plot()
+
+
+# In[84]:
+
+
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Acc')
+plt.legend(['acc', 'val_acc'])
+plt.show()
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# ## 배운 내용 정리
+# 1. 딥러닝 모델 프로세스
+# ① 라이브러리 임포트(import)  
+# ② 데이터 가져오기(Loading the data)  
+# ③ 탐색적 데이터 분석(Exploratory Data Analysis)  
+# ④ 데이터 전처리(Data PreProcessing) : 데이터타입 변환, Null 데이터 처리, 누락데이터 처리, 
+# 더미특성 생성, 특성 추출 (feature engineering) 등  
+# ⑤ Train, Test  데이터셋 분할  
+# ⑥ 데이터 정규화(Normalizing the Data)  
+# ⑦ 모델 개발(Creating the Model)  
+# ⑧ 모델 성능 평가
+# 2. 딥러닝 모델 DNN, CNN, RNN 모델 구축
